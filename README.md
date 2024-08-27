@@ -8,7 +8,14 @@ Only tested on Windows, but should work elsewhere.
 
 Install dependencies:
 ```
-pip install denonavr tkinter async_tkinter_loop
+pip install denonavr async_tkinter_loop
 ```
 
-Set your AVR's IP address in the main function and run with `py.exe avr.py`
+## Usage
+Set your AVR's IP address to the `AVR_IP_ADDRESS` variable in the `avr.py` and test with `py.exe avr.py`.
+
+When everything works, you can for example in Windows use the Task Scheduler to run the script after user login. Use `pyw.exe` (or `pythonw.exe`) as the script to run to avoid command prompt appearing, and set the path to `avr.py` as an argument.
+
+When adjusting volume, the overlay should appear in the top right corner of the screen, and disappear after one second.
+
+![alt text](https://github.com/stuomas/avr-volume-overlay/blob/main/screenshot.jpg?raw=true)

@@ -1,58 +1,90 @@
 import denonavr
 import sys
+import time
 import os
 import tkinter as tk
+import tkinter.font as tkFont
 import asyncio
 from async_tkinter_loop import async_mainloop, get_event_loop
+
+
+AVR_IP_ADDRESS = '192.168.1.104'
 
 
 class VolOverlay:
     def __init__(self):
         self.window = tk.Tk()
-        self.width = 200
-        self.height = 60
-        self.posx = 2560 - self.width - 25
-        self.posy = 0 + 25
         self.vol_img = tk.PhotoImage(file='./icons/vol.png')
         self.mute_img = tk.PhotoImage(file='./icons/mute.png')
-        self.label = None
+        self.vol_font = tkFont.Font(font=("Grandview Display", 20, tkFont.BOLD))
+        self.format_font = tkFont.Font(font=("Consolas", 12))
+        self.text = None
+        self.img_label = None
         self.timer = None
-        self.prev_vol = None
+        self.prev_vol = ''
+        self.prev_muted = False
+        self.last_audio_format = 'Unknown audio format'
         self._init_window()
 
     def _init_window(self):
-        self.window.geometry('%dx%d+%d+%d' % (self.width, self.height, self.posx, self.posy))
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
-        self.window.attributes('-alpha', 0.90)
-        self.window.configure(bg='#000000')
-        self.label = tk.Label(self.window)
+        self.window.attributes('-alpha', 0.80)
+        self.window.configure(bg='#000000', padx=15, pady=5)
+        self.img_label = tk.Label(self.window, image=self.vol_img, background="#000000", padx=15)
+        self.img_label.pack(side="left")
+        self.text = tk.Text(self.window, background="#000000", bd=0, highlightthickness=0, padx=15)
+        self.text.tag_configure("volume", font=self.vol_font, foreground="#FFFFFF")
+        self.text.tag_configure("format", font=self.format_font, foreground="#EEEEEE", lmargin1=2)
+        self.text.pack(side="right", fill="both", expand=True)
         self.hide()
 
     def hide(self):
         self.window.withdraw()
         
     def show_vol(self, vol, muted):
-        if vol:
+        if self.timer is not None:
+            self.timer.cancel()
+
+        if vol is not None:
             self.prev_vol = vol
-        self.window.deiconify()
+        if muted is not None:
+            self.prev_muted = muted
+
         img = self.mute_img if muted else self.vol_img
-        self.label.config(
-            text=f'{self.prev_vol}',
-            font=("Source Sans Pro", 32),
-            image=img, compound=tk.LEFT,
-            bg='#000000',
-            fg='#ffffff',
-            padx=15,
-        )
-        self.label.pack(expand=True)
+        self.img_label.configure(image=img)
+        self.text.delete("1.0", tk.END)
+        self.text.delete("2.0", tk.END)
+        self.text.insert("1.0", f'{self.prev_vol}\n', "volume")
+        self.text.insert("2.0", f'{self.last_audio_format}\n', "format")
+        self.adjust_window_width()
+        self.window.deiconify()
+
+        if not muted:
+            overlay.timer = asyncio.create_task(self.hide_window())
+
+    def adjust_window_width(self):
+        screen_width = self.window.winfo_screenwidth()
+        monospaced_text = self.text.get("2.0", "2.end")
+        text_width_pixels = self.format_font.measure(monospaced_text)
+        padding = 100
+        new_width = text_width_pixels + padding
+        margin = 25
+        height = 65
+        posx = screen_width - new_width - margin
+        posy = margin
+        self.window.geometry(f"{new_width}x{height}")
+        self.window.geometry('%dx%d+%d+%d' % (new_width, height, posx, posy))
+
+    def update_audio_format(self, format):
+        self.last_audio_format = format
+
+    async def hide_window(self, after=1):
+        await asyncio.sleep(after)
+        self.hide()
+
 
 overlay = VolOverlay()
-
-
-async def hide_window():
-    await asyncio.sleep(1)
-    overlay.hide()
 
 
 def convert_vol_to_string(value):
@@ -65,23 +97,19 @@ def convert_vol_to_string(value):
 
 
 async def update_callback(zone, event, parameter):
-    if overlay.timer is not None:
-        overlay.timer.cancel()
-
     muted = False
     vol = None
-    if zone == "Main" and event == "MV":
+    if zone == "Main" and event == "MV" and parameter is not None:
         vol = convert_vol_to_string(parameter)
-    elif zone == "Main" and event == "MU":
+    elif zone == "Main" and event == "MU" and parameter is not None:
         muted = parameter == "ON"
+    elif zone == "Main" and event == "MS" and parameter is not None:
+        overlay.update_audio_format(parameter)
     else:
         print("Unhandled event: Zone: " + zone + " Event: " + event + " Parameter: " + parameter)
         return
 
     overlay.show_vol(vol, muted)
-
-    if not muted:
-        overlay.timer = asyncio.create_task(hide_window())
 
 
 async def connect_avr(ip):
@@ -103,9 +131,9 @@ def main():
         from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
         set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
-    denon_ip = '192.168.1.104'
-    avr = get_event_loop().run_until_complete(connect_avr(denon_ip))
+    avr = get_event_loop().run_until_complete(connect_avr(AVR_IP_ADDRESS))
     avr.register_callback("ALL", update_callback)
+    overlay.last_audio_format = avr.sound_mode_raw
     
     async_mainloop(overlay.window)
 
