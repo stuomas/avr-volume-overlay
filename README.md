@@ -8,7 +8,7 @@ Only tested on Windows, but should work elsewhere.
 
 Install dependencies:
 ```
-pip install denonavr async_tkinter_loop
+pip install denonavr==1.2.0 async-tkinter-loop==0.10.3
 ```
 
 ## Usage
