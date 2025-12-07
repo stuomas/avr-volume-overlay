@@ -131,11 +131,13 @@ def main():
         from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
         set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
-    avr = get_event_loop().run_until_complete(connect_avr(AVR_IP_ADDRESS))
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    avr = loop.run_until_complete(connect_avr(AVR_IP_ADDRESS))
     avr.register_callback("ALL", update_callback)
     overlay.last_audio_format = avr.sound_mode_raw
     
-    async_mainloop(overlay.window)
+    async_mainloop(overlay.window, loop)
 
 
 if __name__ == "__main__":
